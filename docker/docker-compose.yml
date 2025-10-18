@@ -1,0 +1,22 @@
+
+version: "3.10"
+services:
+  fastapi_app:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../src:/app/src
+    environment:
+      - PYTHONUNBUFFERED=1
+    working_dir: /app/src
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+    networks:
+      testdb:
+        ipv4_address: 172.17.0.5
+
+networks:
+  testdb:
+    external: true
