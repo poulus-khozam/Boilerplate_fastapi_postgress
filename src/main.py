@@ -1,7 +1,7 @@
 # src/main.py
 from fastapi import FastAPI
-from .routes import auth
-from .database import Base, engine
+from routes import auth
+from database import Base, engine
 
 # This will create the tables in the database if they don't exist
 # You might want to manage this with Alembic in a production environment
