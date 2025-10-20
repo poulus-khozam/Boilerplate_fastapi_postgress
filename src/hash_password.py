@@ -1,8 +1,15 @@
 import sys
+import os
+
+# --- ADD THESE LINES ---
+# This ensures that the script can find the 'core' module
+# by adding its parent directory ('/app/src') to the system path.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# --- END OF ADDED LINES ---
+
 from core.security import get_password_hash
 
 # This script takes one command-line argument: the password to hash.
-# docker-compose exec fastapi_app python hash_password.py "my_super_secret_password"
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python hash_password.py <your_password_here>")
