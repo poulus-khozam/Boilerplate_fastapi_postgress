@@ -21,7 +21,7 @@ def login_for_access_token(
     db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()
 ):
     user = auth_controller.authenticate_user(
-        db, id_number=form_data.username, password=form_data.password
+        db, company_number=form_data.username, password=form_data.password
     )
     if not user:
         raise HTTPException(
