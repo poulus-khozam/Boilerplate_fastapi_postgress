@@ -1,11 +1,9 @@
 import sys
 import os
 
-# --- ADD THESE LINES ---
 # This ensures that the script can find the 'core' module
 # by adding its parent directory ('/app/src') to the system path.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-# --- END OF ADDED LINES ---
 
 from core.security import get_password_hash
 
