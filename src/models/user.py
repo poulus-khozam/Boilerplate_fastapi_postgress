@@ -1,7 +1,7 @@
 # src/models/user.py
 from pydantic import BaseModel
 from sqlalchemy import Column, String, Integer
-from ..database import Base
+from database import Base
 
 
 class NPCUser(Base):
