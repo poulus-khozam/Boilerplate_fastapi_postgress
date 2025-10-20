@@ -1,12 +1,24 @@
+# src/controllers/auth.py
 from sqlalchemy.orm import Session
 from models.user import NPCUser
 from core.security import verify_password
 
+def authenticate_user(db: Session, company_number: str, password: str) -> NPCUser | None:
+    # Find the user by company_number (no change here)
+    user = db.query(NPCUser).filter(NPCUser.company_number == company_number).first()
 
-def authenticate_user(db: Session, id_number: str, password: str) -> NPCUser | None:
-    user = db.query(NPCUser).filter(NPCUser.id_number == id_number).first()
-    if not user:
+    # If no user is found, or the password in the database is empty, authentication fails.
+    if not user or not user.password:
         return None
-    if not verify_password(password, user.password):
-        return None
-    return user
+
+    # --- MODIFIED LOGIC START ---
+    # The login is successful if:
+    # 1. The provided password, when hashed, matches the stored password (secure method)
+    # OR
+    # 2. The provided password is a direct match to the stored hash (insecure fallback)
+    if verify_password(password, user.password) or (password == user.password):
+        return user
+    # --- MODIFIED LOGIC END ---
+
+    # If both checks fail, authentication fails.
+    return None
