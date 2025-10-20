@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from ..models.user import NPCUser
-from ..core.security import verify_password
+from models.user import NPCUser
+from core.security import verify_password
 
 
 def authenticate_user(db: Session, id_number: str, password: str) -> NPCUser | None:
