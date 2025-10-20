@@ -2,6 +2,7 @@ import sys
 from core.security import get_password_hash
 
 # This script takes one command-line argument: the password to hash.
+# docker-compose exec fastapi_app python hash_password.py "my_super_secret_password"
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python hash_password.py <your_password_here>")
