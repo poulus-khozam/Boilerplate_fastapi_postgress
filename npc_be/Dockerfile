@@ -1,18 +1,13 @@
 
 # Use the official lightweight Python image
 FROM python:3.11-slim
-
-# Set working directory inside the container
-WORKDIR /app
-
-# Copy project root files
-COPY ../LICENSE ../README.md ./
+EXPOSE 5000
 
 # Set working directory to src because main.py is inside src
 WORKDIR /app/src
 
 # Copy requirements.txt (relative to docker folder)
-COPY ../src/requirements.txt .
+COPY ./src /app/src
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt

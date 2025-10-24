@@ -1,0 +1,23 @@
+#version: "3.10"
+services:
+  fastapi_app:
+    build: ./npc_be/.
+    ports:
+      - "5000:5000"
+    # volumes:
+    #  - ../src:/app/src
+    environment:
+      - PYTHONUNBUFFERED=1    
+      
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+
+    #networks:
+    #  testdb:
+    #    ipv4_address: 172.17.0.5
+
+#networks:
+#  testdb:
+#    external: true
