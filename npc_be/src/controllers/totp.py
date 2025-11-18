@@ -6,21 +6,12 @@ from core.security import create_access_token
 from jose import jwt, JWTError
 from core.config import settings
 from datetime import timedelta
+from controllers.auth import get_user_from_token
 
 
 def verify_totp(db: Session, token: str, totp_code: str):
-    try:
-        # CORRECTED LINE: Use settings.ALGORITHM instead of importing ALGORITHM
-        payload = jwt.decode(token, settings.SECRET_KEY,
-                             algorithms=[settings.ALGORITHM])
-        company_number: str = payload.get("sub")
-        if company_number is None:
-            return None
-    except JWTError:
-        return None
+    user = get_user_from_token(db, token)
 
-    user = db.query(NPCUser).filter(
-        NPCUser.company_number == company_number).first()
     if not user or not user.totp_secret:
         return None
 

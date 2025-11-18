@@ -1,7 +1,7 @@
 # src/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import auth, totp
+from routes import auth, totp, user
 from database import Base, engine
 
 # This will create the tables in the database if they don't exist
@@ -25,6 +25,7 @@ app.add_middleware(
 
 app.include_router(auth.router, tags=["Authentication"])
 app.include_router(totp.router, tags=["TOTP"])
+app.include_router(user.router, tags=["Users"])
 
 
 @app.get("/")

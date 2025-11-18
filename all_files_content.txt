@@ -1,0 +1,767 @@
+file: ./README.md
+# Boilerplate_fastapi_postgress
+
+---END-OF-FILE---
+
+file: ./npc_be/Dockerfile
+
+# Use the official lightweight Python image
+FROM python:3.11-slim
+EXPOSE 5000
+
+# Set working directory to src because main.py is inside src
+WORKDIR /app/src
+
+# Copy requirements.txt (relative to docker folder)
+COPY ./src /app/src
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Set environment variable for Python
+ENV PYTHONUNBUFFERED=1
+
+# Command to run the FastAPI app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]
+
+---END-OF-FILE---
+
+file: ./npc_be/src/models/user.py
+# src/models/user.py
+from pydantic import BaseModel
+from sqlalchemy import Column, String, Integer
+from database import Base
+
+
+class NPCUser(Base):
+    __tablename__ = "npc_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_number = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String)
+    totp_secret = Column(String)
+    id_number = Column(String, unique=True, index=True, nullable=False)
+    password = Column(String, nullable=False)
+
+---END-OF-FILE---
+
+file: ./npc_be/src/requirements.txt
+
+fastapi==0.110.2
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+python-dotenv==1.0.1
+pydantic-settings==2.2.1
+passlib[bcrypt]
+bcrypt
+python-jose[cryptography]
+psycopg2-binary
+sqlalchemy
+pyotp
+
+---END-OF-FILE---
+
+file: ./npc_be/src/database.py
+# src/database.py
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from core.config import settings
+
+SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+---END-OF-FILE---
+
+file: ./npc_be/src/routes/totp.py
+# src/routes/totp.py
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from controllers import totp as totp_controller
+from database import get_db
+from schemas.totp import TotpVerify
+from schemas.token import Token
+
+router = APIRouter()
+
+
+@router.post("/verify-totp", response_model=Token)
+def verify_totp_route(
+    totp_data: TotpVerify, db: Session = Depends(get_db)
+):
+    tokens = totp_controller.verify_totp(
+        db, token=totp_data.login_token, totp_code=totp_data.totp_code
+    )
+    if not tokens:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid TOTP code",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return tokens
+
+---END-OF-FILE---
+
+file: ./npc_be/src/routes/auth.py
+# src/routes/auth.py
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+
+# --- CORRECTED LINES START ---
+from controllers import auth as auth_controller
+from core.config import settings
+from core.security import create_access_token
+from database import get_db
+from schemas.token import Token
+# --- CORRECTED LINES END ---
+
+router = APIRouter()
+
+
+@router.post("/login", response_model=Token)
+def login_for_access_token(
+    db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()
+):
+    user = auth_controller.authenticate_user(
+        db, company_number=form_data.username, password=form_data.password
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect ID number or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)     
+    access_token = create_access_token(
+       subject=user.company_number, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+---END-OF-FILE---
+
+file: ./npc_be/src/routes/user.py
+# src/routes/user.py
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+from database import get_db
+from schemas.password import ChangePassword
+from controllers import user as user_controller
+from models.user import NPCUser
+from core.dependencies import get_current_user
+
+router = APIRouter()
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+def change_password(
+    passwords: ChangePassword,
+    db: Session = Depends(get_db),
+    current_user: NPCUser = Depends(get_current_user),
+):
+    """
+    Changes the password for the currently authenticated user.
+
+    - **Authentication**: Requires a valid JWT access token in the Authorization header.
+    - **Request Body**: Expects a JSON object with "old_password" and "new_password".
+    - **Responses**:
+        - `200 OK`: If the password was changed successfully.
+        - `400 Bad Request`: If the provided "old_password" is incorrect.
+        - `401 Unauthorized`: If the access token is missing or invalid.
+    """
+    return user_controller.change_user_password(db=db, user=current_user, passwords=passwords)
+
+---END-OF-FILE---
+
+file: ./npc_be/src/routes/__init__.py
+
+---END-OF-FILE---
+
+file: ./npc_be/src/hash_password.py
+import sys
+import os
+
+# This ensures that the script can find the 'core' module
+# by adding its parent directory ('/app/src') to the system path.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from core.security import get_password_hash
+
+# This script takes one command-line argument: the password to hash.
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python hash_password.py <your_password_here>")
+        sys.exit(1)
+    
+    plain_password = sys.argv[1]
+    hashed_password = get_password_hash(plain_password)
+    
+    print("Plain Password:", plain_password)
+    print("Hashed Password:", hashed_password)
+    print("\n✅ You can now use this hashed password in your database.")
+
+---END-OF-FILE---
+
+file: ./npc_be/src/main.py
+# src/main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routes import auth, totp, user
+from database import Base, engine
+
+# This will create the tables in the database if they don't exist
+# You might want to manage this with Alembic in a production environment
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI()
+
+origins = [
+    "http://localhost:5173",  # The origin of your Vue.js front-end
+    "http://localhost",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods: GET, POST, etc.
+    allow_headers=["*"],  # Allows all headers
+)
+
+app.include_router(auth.router, tags=["Authentication"])
+app.include_router(totp.router, tags=["TOTP"])
+app.include_router(user.router, tags=["Users"])
+
+
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the NPC Users API"}
+
+---END-OF-FILE---
+
+file: ./npc_be/src/core/dependencies.py
+# src/core/dependencies.py
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from database import get_db
+from models.user import NPCUser
+from controllers.auth import get_user_from_token
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> NPCUser:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    user = get_user_from_token(db, token)
+
+    if user is None:
+        raise credentials_exception
+    return user
+
+---END-OF-FILE---
+
+file: ./npc_be/src/core/security.py
+# src/core/security.py
+from datetime import datetime, timedelta
+from typing import Any, Union
+
+from jose import jwt
+from passlib.context import CryptContext
+
+from .config import settings
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def create_access_token(
+    subject: Union[str, Any],
+    expires_delta: timedelta = None,
+    additional_claims: dict = None
+) -> str:
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
+
+    # Start with the standard claims
+    to_encode = {"exp": expire, "sub": str(subject)}
+
+    # Add any extra claims if they exist
+    if additional_claims:
+        to_encode.update(additional_claims)
+
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    password_bytes = password.encode('utf-8')
+    # Truncate the byte string to 72 bytes.
+    truncated_bytes = password_bytes[:72]
+    # Decode it back to a string for passlib. Use 'ignore' to prevent errors
+    # if a multi-byte character was cut in the middle.
+    password_to_hash = truncated_bytes.decode('utf-8', 'ignore')
+    return pwd_context.hash(password_to_hash)
+
+---END-OF-FILE---
+
+file: ./npc_be/src/core/config.py
+# src/core/config.py
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    DATABASE_URL: str
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
+    class Config:
+        env_file = ".env"
+
+
+settings = Settings()
+
+---END-OF-FILE---
+
+file: ./npc_be/src/schemas/totp.py
+# src/schemas/totp.py
+from pydantic import BaseModel
+
+
+class TotpVerify(BaseModel):
+    login_token: str
+    totp_code: str
+
+---END-OF-FILE---
+
+file: ./npc_be/src/schemas/password.py
+# src/schemas/password.py
+from pydantic import BaseModel
+
+
+class ChangePassword(BaseModel):
+    old_password: str
+    new_password: str
+
+---END-OF-FILE---
+
+file: ./npc_be/src/schemas/user.py
+from pydantic import BaseModel
+
+
+class UserLogin(BaseModel):
+    id_number: str
+    password: str
+
+---END-OF-FILE---
+
+file: ./npc_be/src/schemas/token.py
+# src/schemas/token.py
+from pydantic import BaseModel
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    id_number: str | None = None
+
+---END-OF-FILE---
+
+file: ./npc_be/src/controllers/totp.py
+# src/controllers/totp.py
+import pyotp
+from sqlalchemy.orm import Session
+from models.user import NPCUser
+from core.security import create_access_token
+from jose import jwt, JWTError
+from core.config import settings
+from datetime import timedelta
+from controllers.auth import get_user_from_token
+
+
+def verify_totp(db: Session, token: str, totp_code: str):
+    user = get_user_from_token(db, token)
+
+    if not user or not user.totp_secret:
+        return None
+
+    totp = pyotp.TOTP(user.totp_secret)
+    if totp.verify(totp_code):
+        access_token_expires = timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        additional_claims = {"2fa": "OK"}
+        access_token = create_access_token(
+            subject=user.company_number, expires_delta=access_token_expires, additional_claims=additional_claims
+        )
+        return {"access_token": access_token, "token_type": "bearer"}
+
+    return None
+
+---END-OF-FILE---
+
+file: ./npc_be/src/controllers/auth.py
+# src/controllers/auth.py
+from sqlalchemy.orm import Session
+from models.user import NPCUser
+from core.security import verify_password
+from jose import jwt, JWTError
+from core.config import settings
+
+
+def authenticate_user(db: Session, company_number: str, password: str) -> NPCUser | None:
+    # Find the user by company_number
+    user = db.query(NPCUser).filter(
+        NPCUser.company_number == company_number).first()
+
+    # If no user is found, or the password in the database is empty, authentication fails.
+    if not user or not user.password:
+        return None
+
+    # --- THIS IS THE CRITICAL LOGIC BLOCK ---
+    # 1. First, try to verify the input as a plain-text password.
+    try:
+        if verify_password(password, user.password):
+            # If verification is successful, we are done. Return the user.
+            return user
+    except ValueError:
+        # This block will run if verify_password fails, for example,
+        # because the provided password string is >72 characters.
+        # We can safely ignore this error and proceed to the next check.
+        pass
+
+    # 2. If the first check failed, try a direct string comparison.
+    # This allows logging in by providing the already-hashed password.
+    if password == user.password:
+        return user
+    # --- END OF CRITICAL LOGIC ---
+
+    # If both checks have failed, authentication fails.
+    return None
+
+
+def get_user_from_token(db: Session, token: str) -> NPCUser | None:
+    """
+    Decodes a JWT, extracts the company_number, and retrieves the user from the database.
+    Returns the user object or None if the token is invalid or the user doesn't exist.
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY,
+                             algorithms=[settings.ALGORITHM])
+        company_number: str = payload.get("sub")
+        if company_number is None:
+            return None
+    except JWTError:
+        return None
+
+    user = db.query(NPCUser).filter(
+        NPCUser.company_number == company_number).first()
+    return user
+
+---END-OF-FILE---
+
+file: ./npc_be/src/controllers/user.py
+# src/controllers/user.py
+from sqlalchemy.orm import Session
+from models.user import NPCUser
+from schemas.password import ChangePassword
+from core.security import verify_password, get_password_hash
+from fastapi import HTTPException, status
+from passlib.exc import UnknownHashError
+
+
+def change_user_password(db: Session, user: NPCUser, passwords: ChangePassword):
+    # Sanitize inputs: remove leading/trailing whitespace.
+    old_pass = passwords.old_password.strip()[:72]
+    new_pass = passwords.new_password.strip()[:72]
+
+    # Validate old password length.
+    if len(old_pass) > 72:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Old password cannot be longer than 72 characters.",
+        )
+
+    # Validate new password length.
+    if len(new_pass) > 72:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password cannot be longer than 72 characters.",
+        )
+
+    is_old_password_valid = False
+
+    # 1. Check plain-text password first, using the sanitized 'old_pass'.
+    if old_pass == user.password:
+        is_old_password_valid = True
+
+    # 2. If not valid, check hashed password, using the sanitized 'old_pass'.
+    if not is_old_password_valid:
+        try:
+            if verify_password(old_pass, user.password):
+                is_old_password_valid = True
+        except (UnknownHashError, ValueError):
+            # This block correctly handles cases where old_pass is too long
+            # for bcrypt or when user.password is not a hash.
+            pass
+
+    # If neither check succeeded, raise the final error.
+    if not is_old_password_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect old password",
+        )
+
+    # --- THIS IS THE CRITICAL FIX ---
+    # Hash the sanitized 'new_pass', NOT the original 'passwords.new_password'.
+    hashed_password = get_password_hash(new_pass)
+    # --- END OF FIX ---
+
+    user.password = hashed_password
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"message": "Password updated successfully"}
+
+---END-OF-FILE---
+
+file: ./npc_be/src/controllers/__init__.py
+
+---END-OF-FILE---
+
+file: ./.gitignore
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/#use-with-ide
+.pdm.toml
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+# db auth
+serviceAccountKey_projectdb.json
+
+---END-OF-FILE---
+
+file: ./docker-compose.yml
+#version: "3.10"
+services:
+  fastapi_app:
+    build:  
+     context: ./npc_be/.
+     dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+     - ./npc_be/src:/app/src
+    environment:
+      - PYTHONUNBUFFERED=1    
+      
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+
+    #networks:
+    #  testdb:
+    #    ipv4_address: 172.17.0.5
+
+#networks:
+#  testdb:
+#    external: true
+
+---END-OF-FILE---
+
+file: ./.env.example
+DATABASE_URL = 'postgresql://user:password@hostname:port/database_name';
+SECRET_KEY = 'your_super_secret_key';
+ALGORITHM = 'HS256';
+ACCESS_TOKEN_EXPIRE_MINUTES = 30;
+
+---END-OF-FILE---
+

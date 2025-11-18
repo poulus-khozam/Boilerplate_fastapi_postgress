@@ -39,4 +39,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    password_bytes = password.encode('utf-8')
+    # Truncate the byte string to 72 bytes.
+    truncated_bytes = password_bytes[:72]
+    # Decode it back to a string for passlib. Use 'ignore' to prevent errors
+    # if a multi-byte character was cut in the middle.
+    password_to_hash = truncated_bytes.decode('utf-8', 'ignore')
+    return pwd_context.hash(password_to_hash)
