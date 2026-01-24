@@ -1,9 +1,9 @@
 # src/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import auth, totp, user, user_info
+from routes import auth, totp, user, user_info, data
 from database import Base, engine
-from models import ch_data # Import to ensure table creation if using create_all
+from models import ch_data  
 
 
 # This will create the tables in the database if they don't exist
