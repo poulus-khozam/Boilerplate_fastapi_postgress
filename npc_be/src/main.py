@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth, totp, user, user_info
 from database import Base, engine
+from models import ch_data # Import to ensure table creation if using create_all
+
 
 # This will create the tables in the database if they don't exist
 # You might want to manage this with Alembic in a production environment
@@ -27,6 +29,7 @@ app.include_router(auth.router, tags=["Authentication"])
 app.include_router(totp.router, tags=["TOTP"])
 app.include_router(user.router, tags=["Users"])
 app.include_router(user_info.router, tags=["User Info"])
+app.include_router(data.router)
 
 
 @app.get("/")
