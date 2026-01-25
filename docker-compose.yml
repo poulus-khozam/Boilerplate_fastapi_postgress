@@ -12,15 +12,13 @@ services:
       - PYTHONUNBUFFERED=1    
       - DATABASE_URL=${DATABASE_URL}
       - SECRET_KEY=${SECRET_KEY}
-      - ALGORITHM=${ALGORITHM}
+      - ALGORITHM=${ALCHEMY}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
     networks:
       testdb:
-        ipv4_address: 172.17.0.5  # Now properly nested
+        ipv4_address: 172.17.0.5
 
 networks:
   testdb:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.17.0.0/16   # Must include your IP range
+    external: true    # Use existing network instead of creating new one
+    name: testdb      # Exact name of your existing network
