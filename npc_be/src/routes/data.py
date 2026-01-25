@@ -26,7 +26,7 @@ def get_church_name(location_id: str) -> str:
         return f"Location ID {location_id} (Map file not found)"
 
 @router.get("/get_info/{doc_id}", response_model=ChDataResponse)
-def get_info(doc_id: int, db: Session = Depends(get_db)):
+def get_info(doc_id: str, db: Session = Depends(get_db)):
     """
     Get user details by ID.
     - Fetches from ch_data table.
