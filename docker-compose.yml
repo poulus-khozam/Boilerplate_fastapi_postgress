@@ -16,7 +16,7 @@ services:
       - ALGORITHM=${ALGORITHM}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
 
-    #networks:
+    networks:
       testdb:
         ipv4_address: 172.17.0.5
 
