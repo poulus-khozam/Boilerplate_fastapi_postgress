@@ -15,6 +15,8 @@ app = FastAPI()
 origins = [
     "http://localhost:5173",  # The origin of your Vue.js front-end
     "http://localhost",
+    "https://suezcopticdiocese.github.io",
+    "https://www.suezcopticdiocese.github.io",
 ]
 
 app.add_middleware(
