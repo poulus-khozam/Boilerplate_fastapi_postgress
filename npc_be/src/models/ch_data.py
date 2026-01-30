@@ -8,3 +8,5 @@ class ChData(Base):
     name = Column(String)
     location = Column(String) # Stored as ID string (e.g. "1")
     mobile = Column(String)   # This will be fetched but excluded from API response
+    password = Column(String, nullable=True)
+    totp_secret = Column(String, nullable=True)
