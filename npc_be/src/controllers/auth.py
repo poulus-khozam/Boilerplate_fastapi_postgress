@@ -63,19 +63,12 @@ def authenticate_ch_data_user(db: Session, user_id: str, password: str) -> ChDat
     if not user or not user.password:
         return None
 
-    # 1. Try bcrypt verification
-    try:
-        if verify_password(password, user.password):
-            return user
-    except (ValueError, Exception):
-        pass
-
-    # 2. Try direct string comparison (Allows login via already encrypted/hashed string)
+     # PLAIN TEXT CHECK: Direct string comparison
     if password == user.password:
         return user
-
+ 
     return None
-
+ 
 def get_ch_data_user_from_token(db: Session, token: str) -> ChData | None:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
