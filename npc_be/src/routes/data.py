@@ -1,14 +1,17 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm # Add this
+from fastapi.security import OAuth2PasswordRequestForm 
 from sqlalchemy.orm import Session
 from database import get_db
 from models.ch_data import ChData
 from schemas.ch_data import ChDataResponse
-from schemas.token import Token # Add this
-from controllers import auth as auth_controller # Add this
-from core.config import settings # Add this
-from core.security import create_access_token # Add this
+from schemas.token import Token 
+from schemas.password import ChangePassword 
+from controllers import auth as auth_controller 
+from controllers import user as user_controller 
+from core.config import settings 
+from core.security import create_access_token 
+from core.dependencies import get_current_ch_user 
 import json
 import os
 
@@ -87,3 +90,17 @@ def login_ch_data(
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+def change_ch_password(
+    passwords: ChangePassword,
+    db: Session = Depends(get_db),
+    current_user: ChData = Depends(get_current_ch_user),
+):
+    """
+    Changes password for ChData users.
+    Requires Bearer Token from /api/v1/login.
+    """
+    return user_controller.change_ch_data_password(
+        db=db, user=current_user, passwords=passwords
+    )
