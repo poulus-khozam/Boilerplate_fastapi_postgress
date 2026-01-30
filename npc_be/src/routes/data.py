@@ -1,10 +1,16 @@
-import json
-import os
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm # Add this
 from sqlalchemy.orm import Session
 from database import get_db
 from models.ch_data import ChData
 from schemas.ch_data import ChDataResponse
+from schemas.token import Token # Add this
+from controllers import auth as auth_controller # Add this
+from core.config import settings # Add this
+from core.security import create_access_token # Add this
+import json
+import os
 
 router = APIRouter(
     prefix="/api/v1",
@@ -51,3 +57,33 @@ def get_info(doc_id: str, db: Session = Depends(get_db)):
         "name": user.name,
         "location": church_name
     }
+
+@router.post("/login", response_model=Token)
+def login_ch_data(
+    db: Session = Depends(get_db), 
+    form_data: OAuth2PasswordRequestForm = Depends()
+):
+    """
+    Login specifically for users in the ch_data table.
+    - Username field = ID
+    - Password field = Password (plain or hashed)
+    """
+    user = auth_controller.authenticate_ch_data_user(
+        db, user_id=form_data.username, password=form_data.password
+    )
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect ID or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)     
+    
+    # Create token using the ch_data ID as the subject
+    access_token = create_access_token(
+       subject=user.id, expires_delta=access_token_expires
+    )
+    
+    return {"access_token": access_token, "token_type": "bearer"}
