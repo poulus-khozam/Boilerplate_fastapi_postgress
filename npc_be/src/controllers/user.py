@@ -65,22 +65,14 @@ def change_ch_data_password(db: Session, user: ChData, passwords: ChangePassword
     old_pass = passwords.old_password.strip()
     new_pass = passwords.new_password.strip()
 
-    # 1. Verify Old Password (Supports plain or hashed)
-    is_valid = False
-    if old_pass == user.password: # Plain text check
-        is_valid = True
-    else:
-        try:
-            if verify_password(old_pass, user.password): # Hashed check
-                is_valid = True
-        except:
-            pass
-
-    if not is_valid:
+    # 1. Verify Old Password (Plain text)
+    if user.password != old_pass:
         raise HTTPException(status_code=400, detail="Incorrect old password")
 
-    # 2. Hash and Save New Password
-    user.password = get_password_hash(new_pass)
+    # 2. Save New Password (Plain text - NOT calling get_password_hash)
+    user.password = new_pass
     db.add(user)
     db.commit()
-    return {"message": "Password updated successfully"}
+    db.refresh(user)
+    
+    return {"message": "Password updated successfully for " + user.id}
