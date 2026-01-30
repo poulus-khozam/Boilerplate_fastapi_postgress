@@ -1,0 +1,1 @@
+find . -type f -not -path '*/.git/*' -not -name '.env' -not -name 'all_files_content.txt' -print0 | while IFS= read -r -d '' file; do     if ! git check-ignore --quiet ""$file""; then         echo ""file: ${file}"";         cat ""${file}"";         echo;         echo ""---END-OF-FILE---"";         echo;     fi; done > all_files_content.txt
