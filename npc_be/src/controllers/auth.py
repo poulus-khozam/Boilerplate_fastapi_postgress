@@ -75,3 +75,14 @@ def authenticate_ch_data_user(db: Session, user_id: str, password: str) -> ChDat
         return user
 
     return None
+
+def get_ch_data_user_from_token(db: Session, token: str) -> ChData | None:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            return None
+    except JWTError:
+        return None
+
+    return db.query(ChData).filter(ChData.id == user_id).first()
