@@ -7,6 +7,7 @@ from models.ch_data import ChData
 from schemas.ch_data import ChDataResponse
 from schemas.token import Token 
 from schemas.password import ChangePassword 
+from schemas.ui import MenuItem
 from controllers import auth as auth_controller 
 from controllers import user as user_controller 
 from core.config import settings 
@@ -14,6 +15,7 @@ from core.security import create_access_token
 from core.dependencies import get_current_ch_user 
 import json
 import os
+
 
 router = APIRouter(
     prefix="/api/v1",
@@ -104,3 +106,41 @@ def change_ch_password(
     return user_controller.change_ch_data_password(
         db=db, user=current_user, passwords=passwords
     )
+
+@router.get("/menu", response_model=List[MenuItem])
+def get_dynamic_menu(
+    current_user: ChData = Depends(get_current_ch_user)
+):
+    """
+    Returns a dynamic list of menu items for the Church User.
+    This allows you to control the UI from the Backend.
+    """
+    
+    menu = [
+        MenuItem(
+            id="profile",
+            label=f"Welcome, {current_user.name}",
+            icon="mdi-account",
+            action_type="INFO",
+            destination="",
+            color="grey"
+        ),
+        MenuItem(
+            id="change_pwd",
+            label="تغيير كلمة المرور", # Change Password
+            icon="mdi-key-variant",
+            action_type="NAVIGATE",
+            destination="/change-password",
+            color="blue"
+        ),
+        MenuItem(
+            id="logout",
+            label="تسجيل خروج", # Logout
+            icon="mdi-logout",
+            action_type="LOGOUT",
+            destination="/login",
+            color="red"
+        )
+    ]
+    
+    return menu
