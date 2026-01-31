@@ -13,6 +13,7 @@ from controllers import user as user_controller
 from core.config import settings 
 from core.security import create_access_token 
 from core.dependencies import get_current_ch_user 
+from typing import List 
 import json
 import os
 
