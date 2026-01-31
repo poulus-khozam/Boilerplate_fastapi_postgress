@@ -13,10 +13,21 @@ from controllers import user as user_controller
 from core.config import settings 
 from core.security import create_access_token 
 from core.dependencies import get_current_ch_user 
+from pydantic import BaseModel
 from typing import List 
 import json
 import os
 
+
+# Define the MenuItem class so the route can use it as a response_model
+class MenuItem(BaseModel):
+    id: str
+    label: str
+    icon: str
+    action_type: str
+    destination: str
+    color: str = "primary"
+    
 
 router = APIRouter(
     prefix="/api/v1",
