@@ -132,3 +132,52 @@ def get_all_user_info(
             for r in records
         ]
     }
+
+@router.get("/info_name", status_code=status.HTTP_200_OK)
+def get_info_name(
+    std_code: int,
+    code: int,
+    db: Session = Depends(get_db),
+    current_user: NPCUser = Depends(get_current_user), # JWT Required
+):
+    """
+    Returns the label/name for a specific std_code and code.
+    Example: /info_name?std_code=2&code=1 -> "رقم الموبيل"
+    """
+    result = db.query(NPCResCode).filter(
+        NPCResCode.std_code == std_code,
+        NPCResCode.code == code
+    ).first()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Code definition not found")
+
+    return {
+        "std_code": result.std_code,
+        "code": result.code,
+        "name": result.name
+    }
+
+
+@router.get("/info_name/bulk", status_code=status.HTTP_200_OK)
+def get_info_name_bulk(
+    std_code: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: NPCUser = Depends(get_current_user), # JWT Required
+):
+    """
+    Returns a list of all labels/names.
+    Optional: Filter by std_code.
+    Example: /info_name/bulk?std_code=2
+    """
+    query = db.query(NPCResCode)
+    
+    if std_code is not None:
+        query = query.filter(NPCResCode.std_code == std_code)
+    
+    results = query.all()
+    
+    return [
+        {"std_code": r.std_code, "code": r.code, "name": r.name}
+        for r in results
+    ]
