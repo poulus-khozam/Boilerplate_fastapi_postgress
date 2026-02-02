@@ -5,6 +5,7 @@ from models.user import NPCUser
 from models.user_info import NPCUserInfo
 from schemas.user_info import UserInfoUpdate, BulkInfoUpdate
 from core.dependencies import get_current_user
+from typing import List, Optional
 
 router = APIRouter()
 
@@ -70,3 +71,63 @@ def bulk_update_user_info(
 
     db.commit()
     return {"message": "Bulk update successful"}
+
+@router.get("/user_info", status_code=status.HTTP_200_OK)
+def get_single_user_info(
+    std_code: int,
+    code: int,
+    db: Session = Depends(get_db),
+    current_user: NPCUser = Depends(get_current_user),
+):
+    """
+    Retrieves a single piece of info for the logged-in user.
+    Usage: /user_info?std_code=10&code=1
+    """
+    record = db.query(NPCUserInfo).filter(
+        NPCUserInfo.company_number == current_user.company_number,
+        NPCUserInfo.std_code == std_code,
+        NPCUserInfo.code == code
+    ).first()
+
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Information not found"
+        )
+
+    return {
+        "std_code": record.std_code,
+        "code": record.code,
+        "data": record.data
+    }
+
+
+@router.get("/user_info/bulk", status_code=status.HTTP_200_OK)
+def get_all_user_info(
+    std_code: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: NPCUser = Depends(get_current_user),
+):
+    """
+    Retrieves all info records for the logged-in user.
+    Optional: Filter by std_code.
+    Usage: /user_info/bulk  OR  /user_info/bulk?std_code=10
+    """
+    query = db.query(NPCUserInfo).filter(
+        NPCUserInfo.company_number == current_user.company_number
+    )
+
+    # Optional filter if std_code is provided in query params
+    if std_code is not None:
+        query = query.filter(NPCUserInfo.std_code == std_code)
+
+    records = query.all()
+
+    return {
+        "company_number": current_user.company_number,
+        "count": len(records),
+        "updates": [
+            {"std_code": r.std_code, "code": r.code, "data": r.data} 
+            for r in records
+        ]
+    }
