@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.user import NPCUser
 from models.user_info import NPCUserInfo
+from models.res_code import NPCResCode
 from schemas.user_info import UserInfoUpdate, BulkInfoUpdate
 from core.dependencies import get_current_user
 from typing import List, Optional
