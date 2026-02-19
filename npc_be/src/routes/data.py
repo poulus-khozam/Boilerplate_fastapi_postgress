@@ -180,6 +180,17 @@ def get_dynamic_menu(
     )
     menu.append(
         MenuItem(
+            id="change_pwd",
+            label="تغيير كلمة المرور",
+            icon="mdi-key-variant",
+            action_type="NAVIGATE",
+            destination="/change-password",
+            color="blue"
+        )
+    )
+
+    menu.append(
+        MenuItem(
             id="logout",
             label="تسجيل خروج",
             icon="mdi-logout",
