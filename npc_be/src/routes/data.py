@@ -124,7 +124,7 @@ def get_dynamic_menu(
     db: Session = Depends(get_db),
     current_user: ChData = Depends(get_current_ch_user)
 ):
-     print(f"DEBUG: Fetching menu for User ID: {current_user.id}")
+    print(f"DEBUG: Fetching menu for User ID: {current_user.id}")
     # 1. Start with the Welcome Item
     menu = [
         MenuItem(
