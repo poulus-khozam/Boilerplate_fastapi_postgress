@@ -4,12 +4,10 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from database import get_db
 from models.ch_data import ChData
-from models.profile_details import ChProfileDetails
+from models.profile_details import ChProfileDetails  # Ensure this file exists
 from schemas.ch_data import ChDataResponse
 from schemas.token import Token 
 from schemas.password import ChangePassword 
-from schemas.ui import MenuItem
-from schemas.profile import ProfileMemberResponse
 from controllers import auth as auth_controller 
 from controllers import user as user_controller 
 from core.config import settings 
@@ -20,49 +18,13 @@ from typing import List
 import json
 import os
 
-class ProfileMemberResponse(BaseModel):
-    id: str
-    name: str
+# 1. Define the Router FIRST
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["Business Data"]
+)
 
-@router.get("/profile-members", response_model=List[ProfileMemberResponse])
-def get_profile_members(
-    location: int = 5,
-    profile_id: int = 1,
-    year: int = 2026,
-    month: int = 0,
-    db: Session = Depends(get_db),
-    current_user: ChData = Depends(get_current_ch_user) # Token Required
-):
-    """
-    Equivalent to:
-    select distinct a.id, b.name 
-    from ch_profile_details a join ch_data b on a.id = b.id
-    where a.location = 5 and profile_id = 1 and dyear = 2026 and dmonth = 0
-    """
-    
-    # Using the join and distinct logic
-    results = db.query(ChProfileDetails.id, ChData.name)\
-        .join(ChData, ChProfileDetails.id == ChData.id)\
-        .filter(ChProfileDetails.location == location)\
-        .filter(ChProfileDetails.profile_id == profile_id)\
-        .filter(ChProfileDetails.dyear == year)\
-        .filter(ChProfileDetails.dmonth == month)\
-        .distinct().all()
-
-    # Convert the list of tuples into a list of dictionaries for the response model
-    return [{"id": r.id, "name": r.name} for r in results]
-    
-    
-def get_distinct_profile_members(db: Session, location: int, profile_id: int, year: int, month: int):
-    return db.query(ChProfileDetails.id, ChData.name)\
-        .join(ChData, ChProfileDetails.id == ChData.id)\
-        .filter(ChProfileDetails.location == location)\
-        .filter(ChProfileDetails.profile_id == profile_id)\
-        .filter(ChProfileDetails.dyear == year)\
-        .filter(ChProfileDetails.dmonth == month)\
-        .distinct().all()
-
-# Define the MenuItem class so the route can use it as a response_model
+# 2. Define your Schemas
 class MenuItem(BaseModel):
     id: str
     label: str
@@ -70,132 +32,71 @@ class MenuItem(BaseModel):
     action_type: str
     destination: str
     color: str = "primary"
-    
 
-router = APIRouter(
-    prefix="/api/v1",
-    tags=["Business Data"]
-)
+class ProfileMemberResponse(BaseModel):
+    id: str
+    name: str
 
+# 3. Define Helper functions
 def get_church_name(location_id: str) -> str:
-    """Helper to load JSON and map ID to Name"""
     try:
-        # Construct path relative to this file or project root
-        # Assuming churches.json is in src/
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         json_path = os.path.join(base_path, "churches.json")
-        
         with open(json_path, 'r', encoding='utf-8') as f:
             data_map = json.load(f)
             return data_map.get(str(location_id), "Unknown Location")
     except FileNotFoundError:
         return f"Location ID {location_id} (Map file not found)"
 
-@router.get("/get_info/{doc_id}", response_model=ChDataResponse)
-def get_info(doc_id: str, db: Session = Depends(get_db)):
-    """
-    Get user details by ID.
-    - Fetches from ch_data table.
-    - Hides mobile number.
-    - Maps numeric location to Church Name.
-    - No Token Required.
-    """
-    user = db.query(ChData).filter(ChData.id == doc_id).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No matching document found for that ID."
-        )
-
-    # Map the numeric location ID to the Church Name
-    church_name = get_church_name(user.location)
-
-    # Return data matching the ChDataResponse schema (automatically excludes mobile)
-    return {
-        "id": user.id,
-        "name": user.name,
-        "location": church_name
-    }
-
-@router.post("/login", response_model=Token)
-def login_ch_data(
-    db: Session = Depends(get_db), 
-    form_data: OAuth2PasswordRequestForm = Depends()
-):
-    """
-    Login specifically for users in the ch_data table.
-    - Username field = ID
-    - Password field = Password (plain or hashed)
-    """
-    user = auth_controller.authenticate_ch_data_user(
-        db, user_id=form_data.username, password=form_data.password
-    )
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect ID or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)     
-    
-    # Create token using the ch_data ID as the subject
-    access_token = create_access_token(
-       subject=user.id, expires_delta=access_token_expires
-    )
-    
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@router.post("/change-password", status_code=status.HTTP_200_OK)
-def change_ch_password(
-    passwords: ChangePassword,
+# 4. Define Endpoints
+@router.get("/profile-members", response_model=List[ProfileMemberResponse])
+def get_profile_members(
+    location: int = 5,
+    profile_id: int = 1,
+    year: int = 2026,
+    month: int = 0,
     db: Session = Depends(get_db),
-    current_user: ChData = Depends(get_current_ch_user),
-):
-    """
-    Changes password for ChData users.
-    Requires Bearer Token from /api/v1/login.
-    """
-    return user_controller.change_ch_data_password(
-        db=db, user=current_user, passwords=passwords
-    )
-
-@router.get("/menu", response_model=List[MenuItem])
-def get_dynamic_menu(
     current_user: ChData = Depends(get_current_ch_user)
 ):
     """
-    Returns a dynamic list of menu items for the Church User.
-    This allows you to control the UI from the Backend.
+    Retrieves distinct members based on profile details.
+    Requires a valid Church User Token.
     """
+    results = db.query(ChData.id, ChData.name)\
+        .join(ChProfileDetails, ChData.id == ChProfileDetails.id)\
+        .filter(ChProfileDetails.location == location)\
+        .filter(ChProfileDetails.profile_id == profile_id)\
+        .filter(ChProfileDetails.dyear == year)\
+        .filter(ChProfileDetails.dmonth == month)\
+        .distinct().all()
     
-    menu = [
-        MenuItem(
-            id="profile",
-            label=f"Welcome, {current_user.name}",
-            icon="mdi-account",
-            action_type="INFO",
-            destination="",
-            color="grey"
-        ),
-        MenuItem(
-            id="change_pwd",
-            label="تغيير كلمة المرور", # Change Password
-            icon="mdi-key-variant",
-            action_type="NAVIGATE",
-            destination="/change-password",
-            color="blue"
-        ),
-        MenuItem(
-            id="logout",
-            label="تسجيل خروج", # Logout
-            icon="mdi-logout",
-            action_type="LOGOUT",
-            destination="/login",
-            color="red"
-        )
+    # Convert result tuples to dictionaries
+    return [{"id": r.id, "name": r.name} for r in results]
+
+@router.get("/get_info/{doc_id}", response_model=ChDataResponse)
+def get_info(doc_id: str, db: Session = Depends(get_db)):
+    user = db.query(ChData).filter(ChData.id == doc_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No matching document found.")
+    church_name = get_church_name(user.location)
+    return {"id": user.id, "name": user.name, "location": church_name}
+
+@router.post("/login", response_model=Token)
+def login_ch_data(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
+    user = auth_controller.authenticate_ch_data_user(db, user_id=form_data.username, password=form_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect ID or password")
+    access_token = create_access_token(subject=user.id)
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+def change_ch_password(passwords: ChangePassword, db: Session = Depends(get_db), current_user: ChData = Depends(get_current_ch_user)):
+    return user_controller.change_ch_data_password(db=db, user=current_user, passwords=passwords)
+
+@router.get("/menu", response_model=List[MenuItem])
+def get_dynamic_menu(current_user: ChData = Depends(get_current_ch_user)):
+    return [
+        MenuItem(id="profile", label=f"Welcome, {current_user.name}", icon="mdi-account", action_type="INFO", destination="", color="grey"),
+        MenuItem(id="change_pwd", label="تغيير كلمة المرور", icon="mdi-key-variant", action_type="NAVIGATE", destination="/change-password", color="blue"),
+        MenuItem(id="logout", label="تسجيل خروج", icon="mdi-logout", action_type="LOGOUT", destination="/login", color="red")
     ]
-    
-    return menu
