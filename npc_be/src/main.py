@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes import auth, totp, user, user_info, data
 from database import Base, engine
 from models import ch_data, res_code  
-
+from models import ch_data, res_code, profile_details # Add profile_details here
 
 # This will create the tables in the database if they don't exist
 # You might want to manage this with Alembic in a production environment
