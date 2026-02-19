@@ -1,10 +1,11 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm 
+from fastapi.security import OAuth2PasswordRequestForm  
 from sqlalchemy.orm import Session
 from database import get_db
 from models.ch_data import ChData
-from models.profile_details import ChProfileDetails  # Ensure this file exists
+from models.profile_details import ChProfileDetails  
+from models.profile import ChProfile  
 from schemas.ch_data import ChDataResponse
 from schemas.token import Token 
 from schemas.password import ChangePassword 
@@ -17,6 +18,7 @@ from pydantic import BaseModel
 from typing import List 
 import json
 import os
+
 
 # 1. Define the Router FIRST
 router = APIRouter(
@@ -58,21 +60,45 @@ def get_profile_members(
     db: Session = Depends(get_db),
     current_user: ChData = Depends(get_current_ch_user)
 ):
-    """
-    Retrieves distinct members based on profile details.
-    Requires a valid Church User Token.
-    """
-    results = db.query(ChData.id, ChData.name)\
+    # 1. Check permissions in ch_profile for the logged-in user
+    user_permission = db.query(ChProfile).filter(
+        ChProfile.id == current_user.id,
+        ChProfile.location == location,
+        ChProfile.profile_id == profile_id
+    ).first()
+
+    # 2. If user doesn't exist in ch_profile for this location/profile, deny access
+    if not user_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not allowed to access this profile data."
+        )
+
+    # 3. Build the base query
+    query = db.query(ChData.id, ChData.name)\
         .join(ChProfileDetails, ChData.id == ChProfileDetails.id)\
         .filter(ChProfileDetails.location == location)\
         .filter(ChProfileDetails.profile_id == profile_id)\
         .filter(ChProfileDetails.dyear == year)\
-        .filter(ChProfileDetails.dmonth == month)\
-        .distinct().all()
-    
-    # Convert result tuples to dictionaries
-    return [{"id": r.id, "name": r.name} for r in results]
+        .filter(ChProfileDetails.dmonth == month)
 
+    # 4. Apply conditional filtering based on 'rule'
+    if user_permission.rule == 1:
+        # Rule 1: Can see everyone in this location/profile
+        pass 
+    elif user_permission.rule == 0:
+        # Rule 0: Can only see their own record
+        query = query.filter(ChProfileDetails.id == current_user.id)
+    else:
+        # Fallback for undefined rules
+        raise HTTPException(status_code=403, detail="Invalid permission rule.")
+
+    # 5. Execute with distinct
+    results = query.distinct().all()
+    
+    return [{"id": r.id, "name": r.name} for r in results]
+    
+ 
 @router.get("/get_info/{doc_id}", response_model=ChDataResponse)
 def get_info(doc_id: str, db: Session = Depends(get_db)):
     user = db.query(ChData).filter(ChData.id == doc_id).first()
