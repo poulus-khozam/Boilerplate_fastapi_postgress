@@ -7,7 +7,7 @@ from models.user import NPCUser
 from models.ch_data import ChData
 from controllers.auth import get_user_from_token, get_ch_data_user_from_token
   
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/login")
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> NPCUser:
     credentials_exception = HTTPException(
