@@ -1,11 +1,12 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm  
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased  
 from database import get_db
 from models.ch_data import ChData
 from models.profile_details import ChProfileDetails  
 from models.profile import ChProfile  
+from models.ch_res_code import ChResCode 
 from schemas.ch_data import ChDataResponse
 from schemas.token import Token 
 from schemas.password import ChangePassword 
@@ -18,7 +19,6 @@ from pydantic import BaseModel
 from typing import List 
 import json
 import os
-
 
 # 1. Define the Router FIRST
 router = APIRouter(
@@ -120,9 +120,73 @@ def change_ch_password(passwords: ChangePassword, db: Session = Depends(get_db),
     return user_controller.change_ch_data_password(db=db, user=current_user, passwords=passwords)
 
 @router.get("/menu", response_model=List[MenuItem])
-def get_dynamic_menu(current_user: ChData = Depends(get_current_ch_user)):
-    return [
-        MenuItem(id="profile", label=f"Welcome, {current_user.name}", icon="mdi-account", action_type="INFO", destination="", color="grey"),
-        MenuItem(id="change_pwd", label="تغيير كلمة المرور", icon="mdi-key-variant", action_type="NAVIGATE", destination="/change-password", color="blue"),
-        MenuItem(id="logout", label="تسجيل خروج", icon="mdi-logout", action_type="LOGOUT", destination="/login", color="red")
+def get_dynamic_menu(
+    db: Session = Depends(get_db),
+    current_user: ChData = Depends(get_current_ch_user)
+):
+    # 1. Start with the Welcome Item
+    menu = [
+        MenuItem(
+            id="profile",
+            label=f"أهلاً، {current_user.name}",
+            icon="mdi-account",
+            action_type="INFO",
+            destination="",
+            color="grey"
+        )
     ]
+
+    # 2. Setup Aliases for the double join
+    # b for Location Name (std_code=1)
+    # c for Profile Name (std_code=2)
+    LocationName = aliased(ChResCode)
+    ProfileName = aliased(ChResCode)
+
+    # 3. Execute the SQL Logic
+    # select a.*, b.name, c.name from ch_profile a ...
+    user_assignments = db.query(ChProfile, LocationName.name, ProfileName.name)\
+        .join(LocationName, (LocationName.std_code == 1) & (ChProfile.location == LocationName.code))\
+        .join(ProfileName, (ProfileName.std_code == 2) & (ChProfile.profile_id == ProfileName.code))\
+        .filter(ChProfile.id == current_user.id)\
+        .all()
+
+    # 4. Loop through results and create menu items
+    for assignment, loc_name, prof_name in user_assignments:
+        # Combine b.name || ' ' || c.name
+        combined_label = f"{loc_name} {prof_name}"
+        
+        menu.append(
+            MenuItem(
+                id=f"item_{assignment.location}_{assignment.profile_id}",
+                label=combined_label,
+                icon="mdi-view-list", # You can customize this
+                action_type="NAVIGATE",
+                # destination passes loc and pid as query params
+                destination=f"/profile-members?location={assignment.location}&profile_id={assignment.profile_id}",
+                color="primary"
+            )
+        )
+
+    # 5. Add static items (Change Password & Logout)
+    menu.append(
+        MenuItem(
+            id="change_pwd",
+            label="تغيير كلمة المرور",
+            icon="mdi-key-variant",
+            action_type="NAVIGATE",
+            destination="/change-password",
+            color="blue"
+        )
+    )
+    menu.append(
+        MenuItem(
+            id="logout",
+            label="تسجيل خروج",
+            icon="mdi-logout",
+            action_type="LOGOUT",
+            destination="/login",
+            color="red"
+        )
+    )
+    
+    return menu 
