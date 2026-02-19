@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.ch_data import ChData
 from models.profile_details import ChProfileDetails
+from models.profile_details import ChProfileDetails # Import the new model
 from schemas.ch_data import ChDataResponse
 from schemas.token import Token 
 from schemas.password import ChangePassword 
 from schemas.ui import MenuItem
+from schemas.profile import ProfileMemberResponse
 from controllers import auth as auth_controller 
 from controllers import user as user_controller 
 from core.config import settings 
@@ -19,6 +21,29 @@ from typing import List
 import json
 import os
 
+@router.get("/profile-members", response_model=List[ProfileMemberResponse])
+def read_profile_members(
+    location: int = 5,
+    profile_id: int = 1,
+    year: int = 2026,
+    month: int = 0,
+    db: Session = Depends(get_db),
+    current_user: ChData = Depends(get_current_ch_user) # Token Security
+):
+    """
+    Retrieves distinct members based on profile details.
+    Requires a valid Church User Token.
+    """
+    results = db.query(ChData.id, ChData.name)\
+        .join(ChProfileDetails, ChData.id == ChProfileDetails.id)\
+        .filter(ChProfileDetails.location == location)\
+        .filter(ChProfileDetails.profile_id == profile_id)\
+        .filter(ChProfileDetails.dyear == year)\
+        .filter(ChProfileDetails.dmonth == month)\
+        .distinct().all()
+    
+    return results
+    
 def get_distinct_profile_members(db: Session, location: int, profile_id: int, year: int, month: int):
     return db.query(ChProfileDetails.id, ChData.name)\
         .join(ChData, ChProfileDetails.id == ChData.id)\
