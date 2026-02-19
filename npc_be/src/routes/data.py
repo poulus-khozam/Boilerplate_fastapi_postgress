@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.ch_data import ChData
 from models.profile_details import ChProfileDetails
-from models.profile_details import ChProfileDetails # Import the new model
 from schemas.ch_data import ChDataResponse
 from schemas.token import Token 
 from schemas.password import ChangePassword 
@@ -21,28 +20,38 @@ from typing import List
 import json
 import os
 
+class ProfileMemberResponse(BaseModel):
+    id: str
+    name: str
+
 @router.get("/profile-members", response_model=List[ProfileMemberResponse])
-def read_profile_members(
+def get_profile_members(
     location: int = 5,
     profile_id: int = 1,
     year: int = 2026,
     month: int = 0,
     db: Session = Depends(get_db),
-    current_user: ChData = Depends(get_current_ch_user) # Token Security
+    current_user: ChData = Depends(get_current_ch_user) # Token Required
 ):
     """
-    Retrieves distinct members based on profile details.
-    Requires a valid Church User Token.
+    Equivalent to:
+    select distinct a.id, b.name 
+    from ch_profile_details a join ch_data b on a.id = b.id
+    where a.location = 5 and profile_id = 1 and dyear = 2026 and dmonth = 0
     """
-    results = db.query(ChData.id, ChData.name)\
-        .join(ChProfileDetails, ChData.id == ChProfileDetails.id)\
+    
+    # Using the join and distinct logic
+    results = db.query(ChProfileDetails.id, ChData.name)\
+        .join(ChData, ChProfileDetails.id == ChData.id)\
         .filter(ChProfileDetails.location == location)\
         .filter(ChProfileDetails.profile_id == profile_id)\
         .filter(ChProfileDetails.dyear == year)\
         .filter(ChProfileDetails.dmonth == month)\
         .distinct().all()
+
+    # Convert the list of tuples into a list of dictionaries for the response model
+    return [{"id": r.id, "name": r.name} for r in results]
     
-    return results
     
 def get_distinct_profile_members(db: Session, location: int, profile_id: int, year: int, month: int):
     return db.query(ChProfileDetails.id, ChData.name)\
