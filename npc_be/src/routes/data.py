@@ -10,6 +10,7 @@ from models.ch_res_code import ChResCode
 from schemas.ch_data import ChDataResponse
 from schemas.token import Token 
 from schemas.password import ChangePassword 
+from schemas.profile import MemberWithDegreesResponse, DegreeItem
 from controllers import auth as auth_controller 
 from controllers import user as user_controller 
 from core.config import settings 
@@ -51,52 +52,58 @@ def get_church_name(location_id: str) -> str:
         return f"Location ID {location_id} (Map file not found)"
 
 # 4. Define Endpoints
-@router.get("/profile-members", response_model=List[ProfileMemberResponse])
+@router.get("/profile-members", response_model=List[MemberWithDegreesResponse])
 def get_profile_members(
-    location: int = 5,
-    profile_id: int = 1,
+    location: int,
+    profile_id: int,
     year: int = 2026,
-    month: int = 0,
     db: Session = Depends(get_db),
     current_user: ChData = Depends(get_current_ch_user)
 ):
-    # 1. Check permissions in ch_profile for the logged-in user
-    user_permission = db.query(ChProfile).filter(
+    # 1. Permission Check (Keep your existing ch_profile check here)
+    user_perm = db.query(ChProfile).filter(
         ChProfile.id == current_user.id,
         ChProfile.location == location,
         ChProfile.profile_id == profile_id
     ).first()
 
-    # 2. If user doesn't exist in ch_profile for this location/profile, deny access
-    if not user_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not allowed to access this profile data."
-        )
+    if not user_perm:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
-    # 3. Build the base query
-    query = db.query(ChData.id, ChData.name)\
-        .join(ChProfileDetails, ChData.id == ChProfileDetails.id)\
-        .filter(ChProfileDetails.location == location)\
-        .filter(ChProfileDetails.profile_id == profile_id)\
-        .filter(ChProfileDetails.dyear == year)\
-        .filter(ChProfileDetails.dmonth == month)
+    # 2. Execute the query with the join for degree names (std_code=3)
+    # Note: dmonth=0 filter is removed because we want all months
+    query = db.query(
+        ChData.id, 
+        ChData.name, 
+        ChResCode.name.label("month_name"), 
+        ChProfileDetails.degree
+    ).join(ChProfileDetails, ChData.id == ChProfileDetails.id)\
+     .join(ChResCode, (ChProfileDetails.dmonth == ChResCode.code) & (ChResCode.std_code == 3))\
+     .filter(ChProfileDetails.location == location)\
+     .filter(ChProfileDetails.profile_id == profile_id)\
+     .filter(ChProfileDetails.dyear == year)
 
-    # 4. Apply conditional filtering based on 'rule'
-    if user_permission.rule == 1:
-        # Rule 1: Can see everyone in this location/profile
-        pass 
-    elif user_permission.rule == 0:
-        # Rule 0: Can only see their own record
-        query = query.filter(ChProfileDetails.id == current_user.id)
-    else:
-        # Fallback for undefined rules
-        raise HTTPException(status_code=403, detail="Invalid permission rule.")
+    # Apply rule=0 restriction if necessary
+    if user_perm.rule == 0:
+        query = query.filter(ChData.id == current_user.id)
 
-    # 5. Execute with distinct
-    results = query.distinct().all()
-    
-    return [{"id": r.id, "name": r.name} for r in results]
+    rows = query.all()
+
+    # 3. Group flat results into Master-Detail structure
+    members_map = {}
+    for row in rows:
+        if row.id not in members_map:
+            members_map[row.id] = {
+                "id": row.id,
+                "name": row.name,
+                "degrees": []
+            }
+        members_map[row.id]["degrees"].append({
+            "month_name": row.month_name,
+            "degree": row.degree
+        })
+
+    return list(members_map.values())
     
  
 @router.get("/get_info/{doc_id}", response_model=ChDataResponse)
