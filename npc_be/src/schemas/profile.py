@@ -1,9 +1,12 @@
 # npc_be/src/schemas/profile.py
 from pydantic import BaseModel
+from typing import List
 
-class ProfileMemberResponse(BaseModel):
+class DegreeItem(BaseModel):
+    month_name: str
+    degree: int
+
+class MemberWithDegreesResponse(BaseModel):
     id: str
     name: str
-
-    class Config:
-        from_attributes = True
+    degrees: List[DegreeItem]
