@@ -12,3 +12,4 @@ class ChProfileDetails(Base):
     profile_id = Column(Integer, primary_key=True)
     dyear = Column(Integer, primary_key=True)
     dmonth = Column(Integer, primary_key=True)
+    degree = Column(Integer)
