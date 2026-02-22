@@ -86,7 +86,8 @@ def get_profile_members(
     # Apply rule=0 restriction if necessary
     if user_perm.rule == 0:
         query = query.filter(ChData.id == current_user.id)
-
+    
+    query = query.order_by(ChData.name, ChProfileDetails.dmonth)
     rows = query.all()
 
     # 3. Group flat results into Master-Detail structure
