@@ -1,0 +1,12 @@
+# src/models/ch_data.py
+from sqlalchemy import Column, String, Integer
+from database import Base
+class ChData(Base):
+    __tablename__ = "ch_data"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String)
+    location = Column(String) # Stored as ID string (e.g. "1")
+    mobile = Column(String)   # This will be fetched but excluded from API response
+    password = Column(String, nullable=True)
+    totp_secret = Column(String, nullable=True)

@@ -1,8 +1,9 @@
 # src/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import auth, totp, user, user_info
+from routes import auth, totp, user, user_info, data
 from database import Base, engine
+from models import ch_data, res_code, profile_details, profile, ch_res_code
 
 # This will create the tables in the database if they don't exist
 # You might want to manage this with Alembic in a production environment
@@ -13,11 +14,13 @@ app = FastAPI()
 origins = [
     "http://localhost:5173",  # The origin of your Vue.js front-end
     "http://localhost",
+    "https://suezcopticdiocese.github.io",
+    "https://www.suezcopticdiocese.github.io",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins, 
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods: GET, POST, etc.
     allow_headers=["*"],  # Allows all headers
@@ -27,6 +30,7 @@ app.include_router(auth.router, tags=["Authentication"])
 app.include_router(totp.router, tags=["TOTP"])
 app.include_router(user.router, tags=["Users"])
 app.include_router(user_info.router, tags=["User Info"])
+app.include_router(data.router)
 
 
 @app.get("/")

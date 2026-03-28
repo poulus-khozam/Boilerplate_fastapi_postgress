@@ -1,6 +1,7 @@
 # src/controllers/user.py
 from sqlalchemy.orm import Session
 from models.user import NPCUser
+from models.ch_data import ChData 
 from schemas.password import ChangePassword
 from core.security import verify_password, get_password_hash
 from fastapi import HTTPException, status
@@ -59,3 +60,19 @@ def change_user_password(db: Session, user: NPCUser, passwords: ChangePassword):
     db.commit()
     db.refresh(user)
     return {"message": "Password updated successfully"}
+
+def change_ch_data_password(db: Session, user: ChData, passwords: ChangePassword):
+    old_pass = passwords.old_password.strip()
+    new_pass = passwords.new_password.strip()
+
+    # 1. Verify Old Password (Plain text)
+    if user.password != old_pass:
+        raise HTTPException(status_code=400, detail="Incorrect old password")
+
+    # 2. Save New Password (Plain text - NOT calling get_password_hash)
+    user.password = new_pass
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    return {"message": "Password updated successfully for " + user.id}
